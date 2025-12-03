@@ -1,0 +1,93 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id             String           @id @default(uuid()) @db.Uuid
+  clerkUserId    String           @unique
+  email          String           @unique
+  name           String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  referralStats  ReferralStats?   @relation("ReferralStatsToUser") // Reverted to optional
+  referredById   String?          @db.Uuid
+  referrals      User[]           @relation("ReferralChain")
+  referredBy     User?            @relation("ReferralChain", fields: [referredById], references: [id])
+  subscriptions  Subscription[]
+  billingHistory BillingHistory[] @relation("UserBillingHistory")
+  creditUsages   CreditUsage[]
+}
+
+model ReferralStats {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @unique @db.Uuid
+  referenceId          String   @unique
+  totalUsersSigned     Int      @default(0)
+  totalPaidSubscribers Int      @default(0)
+  totalEarning         Float    @default(0.00)
+  amountDeduct         Float    @default(0.00)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation("ReferralStatsToUser", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Plan {
+  id                      String         @id @default(uuid()) @db.Uuid
+  name                    String         @unique
+  description             String?
+  features                String?
+  // "free", "weekly", "monthly"
+  billingCycle            String
+  price                   Float          @default(0.00)
+  creditsPerPeriod        Int            @default(0)
+  // null = no daily limit
+  dailyLimit              Int?
+  isFree                  Boolean        @default(false)
+  subscriptions           Subscription[]
+}
+
+model Subscription {
+  id                   String           @id @default(uuid()) @db.Uuid
+  userId               String           @db.Uuid
+  planId               String           @db.Uuid
+  billingCycle         String           // "free", "weekly", "monthly"
+  status               String           // "active", "canceled"
+  startDate            DateTime         @default(now())
+  endDate              DateTime
+  remainingCredits     Int              @default(0)
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                 Plan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  billingHistory       BillingHistory[] @relation("SubscriptionBillingHistory")
+}
+
+model BillingHistory {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @db.Uuid
+  subscriptionId  String       @db.Uuid
+  amount          Float        @default(0.00)
+  currency        String       @default("usd")
+  status          String       @default("completed")
+  paymentDate     DateTime     @default(now())
+  // Left here only as a simple human readable reference, not tied to Stripe
+  referenceId     String       @unique
+  user            User         @relation("UserBillingHistory", fields: [userId], references: [id], onDelete: Cascade)
+  subscription    Subscription @relation("SubscriptionBillingHistory", fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+model CreditUsage {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  amount    Int
+  reason    String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
