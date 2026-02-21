@@ -62,3 +62,53 @@ export const sendTelegramNotification = async (imageUrl, email = null, referCode
   });
 };
 
+/**
+ * Send "new user created" to boss (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)
+ * Short, clean, non-technical
+ */
+export const sendUserCreatedToBoss = (email, name, appname = null) => {
+  setImmediate(async () => {
+    try {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID;
+      if (!botToken || !chatId) return;
+
+      const appLine = appname ? `\n📱 App: ${appname}` : "";
+      const message = `✅ New user signed up!${appLine}\n👤 ${name || "—"}\n📧 ${email}`;
+
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: message }),
+      });
+    } catch (e) {
+      console.warn(`Telegram boss notification error: ${e.message}`);
+    }
+  });
+};
+
+/**
+ * Send error to backend dev channel (TELEGRAM_BOT_TOKEN_backend + TELEGRAM_CHAT_ID_backend)
+ */
+export const sendBackendErrorToDev = (context, errorMessage) => {
+  setImmediate(async () => {
+    try {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN_backend;
+      const chatId = process.env.TELEGRAM_CHAT_ID_backend;
+      if (!botToken || !chatId) return;
+
+      const message = `⚠️ ${context}`;
+
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: message }),
+      });
+    } catch (e) {
+      console.warn(`Telegram backend notification error: ${e.message}`);
+    }
+  });
+};
+

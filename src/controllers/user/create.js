@@ -1,9 +1,10 @@
 import { prisma } from "../../lib/prisma.js";
+import { sendUserCreatedToBoss, sendBackendErrorToDev } from "../../lib/telegramNotifier.js";
 
 // Setup or fetch a user. On first creation, attach Free Plan with 2 credits.
 export const setupNewUser = async (req, res) => {
   try {
-    const { clerkUserId, email, name, referredById } = req.body;
+    const { clerkUserId, email, name, referredById, appname } = req.body;
 
     if (!clerkUserId || !email) {
       return res.status(400).json({
@@ -50,8 +51,8 @@ export const setupNewUser = async (req, res) => {
       });
     }
 
-    const generateReferenceId = () =>
-      `REF-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+    const generateReferenceId = (clerkId) =>
+      `REF-${clerkId.replace(/[^a-zA-Z0-9]/g, "").slice(-8)}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -66,7 +67,7 @@ export const setupNewUser = async (req, res) => {
       const referralStats = await tx.referralStats.create({
         data: {
           userId: user.id,
-          referenceId: generateReferenceId(),
+          referenceId: generateReferenceId(clerkUserId),
         },
       });
 
@@ -99,6 +100,8 @@ export const setupNewUser = async (req, res) => {
       return { user, referralStats, subscription };
     });
 
+    sendUserCreatedToBoss(email, result.user.name || name, appname);
+
     return res.status(201).json({
       success: true,
       message: "User created with Free Plan",
@@ -107,7 +110,25 @@ export const setupNewUser = async (req, res) => {
       subscription: result.subscription,
     });
   } catch (error) {
+    if (error.code === "P2002") {
+      const existingUser = await prisma.user.findUnique({
+        where: { clerkUserId: req.body.clerkUserId },
+        include: { subscriptions: { include: { plan: true } }, referralStats: true },
+      });
+      if (existingUser) {
+        return res.status(200).json({
+          success: true,
+          message: "User already exists",
+          user: existingUser,
+        });
+      }
+      return res.status(409).json({
+        success: false,
+        message: "User with this clerkUserId or email already exists",
+      });
+    }
     console.error("Error setting up new user:", error);
+    sendBackendErrorToDev("setupNewUser failed", error.message || String(error));
     return res.status(500).json({
       success: false,
       message: "An error occurred while setting up the user",
