@@ -89,6 +89,38 @@ export const sendUserCreatedToBoss = (email, name, appname = null) => {
 };
 
 /**
+ * Send subscription event to boss (subscribe or cancel)
+ * Short, clean, non-technical
+ */
+export const sendSubscriptionEventToBoss = (type, email, name, planName, price = null) => {
+  setImmediate(async () => {
+    try {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID;
+      if (!botToken || !chatId) return;
+
+      const userLabel = name || email || "User";
+      let message;
+      if (type === "subscribe") {
+        const priceStr = price != null && price > 0 ? ` ($${price})` : "";
+        message = `✅ ${userLabel} subscribed to ${planName}${priceStr}\n📧 ${email}`;
+      } else {
+        message = `🔔 ${userLabel} canceled plan and moved to Free\n📧 ${email}`;
+      }
+
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: message }),
+      });
+    } catch (e) {
+      console.warn(`Telegram subscription notification error: ${e.message}`);
+    }
+  });
+};
+
+/**
  * Send error to backend dev channel (TELEGRAM_BOT_TOKEN_backend + TELEGRAM_CHAT_ID_backend)
  */
 export const sendBackendErrorToDev = (context, errorMessage) => {

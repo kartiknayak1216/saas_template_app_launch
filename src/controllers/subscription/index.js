@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { sendSubscriptionEventToBoss } from "../../lib/telegramNotifier.js";
 
 // Helper to compute end date for a subscription period
 const computeEndDate = (billingCycle) => {
@@ -108,6 +109,8 @@ export const subscribeToPlan = async (req, res) => {
     });
 
     await applyReferralEarning(user, plan);
+
+    sendSubscriptionEventToBoss("subscribe", user.email, user.name, plan.name, plan.price);
 
     return res.status(200).json({
       success: true,
@@ -265,6 +268,8 @@ export const cancelSubscription = async (req, res) => {
 
       return subscription;
     });
+
+    sendSubscriptionEventToBoss("cancel", user.email, user.name, "Free Plan");
 
     return res.status(200).json({
       success: true,
